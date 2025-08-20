@@ -463,17 +463,18 @@ async def initialize_airports():
     
     print(f"Initialized with {len(airports)} airports", file=sys.stderr)
 
-print("Initializing airports database...", file=sys.stderr)
-# Run the initialization in an event loop
-loop = asyncio.get_event_loop()
-loop.run_until_complete(initialize_airports())
+# Run the server
+async def main():
+    """Main function to initialize and run the server."""
+    print("Initializing airports database...", file=sys.stderr)
+    try:
+        await initialize_airports()
+        print("Starting server - waiting for connections...", file=sys.stderr)
+        mcp.run()
+    except Exception as e:
+        print(f"Error running server: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        sys.exit(1)
 
-print("Starting server - waiting for connections...", file=sys.stderr)
-try:
-    # This will keep the server running until interrupted
-    mcp.run()
-except Exception as e:
-    print(f"Error running server: {e}", file=sys.stderr)
-    import traceback
-    traceback.print_exc(file=sys.stderr)
-    sys.exit(1)
+asyncio.run(main())
