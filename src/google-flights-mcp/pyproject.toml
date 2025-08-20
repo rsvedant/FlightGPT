@@ -8,4 +8,5 @@ dependencies = [
     "fast-flights>=2.1",
     "mcp[cli]",
     "fastmcp",
+    "aiohttp"
 ]
