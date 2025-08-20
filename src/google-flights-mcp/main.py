@@ -473,7 +473,8 @@ if __name__ == "__main__":
     print("Starting server - waiting for connections...", file=sys.stderr)
     try:
         # This will keep the server running until interrupted
-        mcp.run()
+        port = int(os.getenv("PORT", "8000"))
+        mcp.run(transport="streamable-http", host="0.0.0.0", port=port)
     except Exception as e:
         print(f"Error running server: {e}", file=sys.stderr)
         import traceback
