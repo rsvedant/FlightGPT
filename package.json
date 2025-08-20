@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently 'next dev --turbopack' 'source src/google-flights-mcp/.venv/bin/activate && bunx --bun @modelcontextprotocol/inspector python3 src/google-flights-mcp/flight_planner_server.py'",
+    "dev": "concurrently 'next dev --turbopack' 'source src/google-flights-mcp/.venv/bin/activate && bunx --bun @modelcontextprotocol/inspector python3 src/google-flights-mcp/main.py'",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
