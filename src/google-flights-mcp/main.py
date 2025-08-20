@@ -35,6 +35,7 @@ DEFAULT_CONFIG = {
     "default_advance_days": 30,
     "seat_classes": ["economy", "premium_economy", "business", "first"]
 }
+AIRPORTS_CACHE_FILE = Path(__file__).parent / "airports_cache.json"
 
 # Global variables
 airports = {}
@@ -70,6 +71,15 @@ async def fetch_airports_csv(url: str = CSV_URL) -> Dict[str, str]:
                         airports_data[iata] = full_name
                 
                 print(f"Loaded {len(airports_data)} airports from CSV", file=sys.stderr)
+                
+                # Save to cache file
+                try:
+                    with open(AIRPORTS_CACHE_FILE, 'w') as f:
+                        json.dump(airports_data, f)
+                    print(f"Saved airports to cache file: {AIRPORTS_CACHE_FILE}", file=sys.stderr)
+                except Exception as cache_e:
+                    print(f"Warning: Could not save airports cache: {cache_e}", file=sys.stderr)
+                
                 return airports_data
     except ImportError:
         print("aiohttp not installed. Cannot fetch airports CSV.", file=sys.stderr)
@@ -78,6 +88,19 @@ async def fetch_airports_csv(url: str = CSV_URL) -> Dict[str, str]:
     except Exception as e:
         print(f"Error fetching airports: {e}", file=sys.stderr)
         return {}
+
+# Load airports from cache if available
+def load_airports_cache() -> Dict[str, str]:
+    """Load airports from cache file if available."""
+    if AIRPORTS_CACHE_FILE.exists():
+        try:
+            with open(AIRPORTS_CACHE_FILE, 'r') as f:
+                cache = json.load(f)
+                print(f"Loaded {len(cache)} airports from cache", file=sys.stderr)
+                return cache
+        except Exception as e:
+            print(f"Error loading airports cache: {e}", file=sys.stderr)
+    return {}
 
 # Initialize the FastMCP server with dependencies
 mcp = FastMCP(
@@ -117,6 +140,12 @@ def search_flights(
     """
     if ctx:
         ctx.info(f"Searching flights from {from_airport} to {to_airport}")
+    
+    # Ensure airports database is loaded
+    ensure_airports_loaded()
+    
+    if not airports:
+        return "Error: Airport database is not loaded. Please ensure the airports cache file is available or the CSV endpoint is accessible."
     
     # Validate inputs
     try:
@@ -279,6 +308,12 @@ def airport_search(query: str, ctx: Context = None) -> str:
     if ctx:
         ctx.info(f"Searching for airports matching: {query}")
     
+    # Ensure airports database is loaded
+    ensure_airports_loaded()
+    
+    if not airports:
+        return "Error: Airport database is not loaded. Please ensure the airports cache file is available or the CSV endpoint is accessible."
+    
     if not query or len(query.strip()) < 2:
         return "Please provide at least 2 characters to search for airports."
     
@@ -422,23 +457,92 @@ Can you help me compare these destinations on the following factors:
 Based on these factors, which would you recommend and why?
 After your recommendation, could you show me flight options for both destinations?"""
 
-# Initialize airports on startup
+# Initialize airports on startup - this is crucial
 async def initialize_airports():
     """Initialize airport data at startup."""
     global airports
     
+    # First try to load from cache
+    cache = load_airports_cache()
+    if cache:
+        airports = cache
+        print(f"Loaded {len(airports)} airports from cache", file=sys.stderr)
+        return
+    
+    # If cache is empty, fetch from CSV
+    print("Cache empty or not found, fetching from CSV...", file=sys.stderr)
     fresh_airports = await fetch_airports_csv()
     if fresh_airports:
         airports = fresh_airports
+        print(f"Successfully fetched {len(airports)} airports from CSV", file=sys.stderr)
+    else:
+        print("ERROR: Failed to load airports from both cache and CSV", file=sys.stderr)
     
     print(f"Initialized with {len(airports)} airports", file=sys.stderr)
 
+def ensure_airports_loaded():
+    """Ensure airports are loaded - synchronous version for use in tools."""
+    global airports
+    
+    if airports:
+        return  # Already loaded
+    
+    print("Airports not loaded, attempting to load from cache...", file=sys.stderr)
+    
+    # Try to load from cache first
+    cache = load_airports_cache()
+    if cache:
+        airports = cache
+        print(f"Loaded {len(airports)} airports from cache in ensure_airports_loaded", file=sys.stderr)
+        return
+    
+    # If no cache, we have a problem in Lambda - airports should be pre-loaded
+    print("ERROR: No airports cache found and cannot fetch in synchronous context", file=sys.stderr)
+    print("Make sure the airports cache file is included in the Lambda deployment", file=sys.stderr)
+
+# Initialize airports when module is imported (important for Lambda)
+print("Module imported - initializing airports...", file=sys.stderr)
+try:
+    # Try to get or create event loop
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    # Run initialization
+    if loop.is_running():
+        # If loop is already running (like in Jupyter), schedule the coroutine
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(asyncio.run, initialize_airports())
+            future.result()
+    else:
+        # Normal case - run the initialization
+        loop.run_until_complete(initialize_airports())
+        
+except Exception as e:
+    print(f"Failed to initialize airports during import: {e}", file=sys.stderr)
+    # Try synchronous fallback
+    cache = load_airports_cache()
+    if cache:
+        airports = cache
+        print(f"Fallback: Loaded {len(airports)} airports from cache", file=sys.stderr)
+    else:
+        print("ERROR: Could not load airports during module import", file=sys.stderr)
+
 # Run the server
 if __name__ == "__main__":
-    print("Initializing airports database...", file=sys.stderr)
-    # Run the initialization in an event loop
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(initialize_airports())
+    print("Running as main - starting server...", file=sys.stderr)
+    
+    # Ensure airports are loaded
+    if not airports:
+        print("Airports not loaded, attempting final initialization...", file=sys.stderr)
+        try:
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(initialize_airports())
+        except Exception as e:
+            print(f"Final initialization failed: {e}", file=sys.stderr)
     
     print("Starting server - waiting for connections...", file=sys.stderr)
     try:
