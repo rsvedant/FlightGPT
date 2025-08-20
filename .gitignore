@@ -42,3 +42,4 @@ next-env.d.ts
 
 # python
 /src/google-flights-mcp/.venv
+/src/google-flights-mcp/airports_cache.json
