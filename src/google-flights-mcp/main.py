@@ -35,7 +35,6 @@ DEFAULT_CONFIG = {
     "default_advance_days": 30,
     "seat_classes": ["economy", "premium_economy", "business", "first"]
 }
-AIRPORTS_CACHE_FILE = Path(__file__).parent / "airports_cache.json"
 
 # Global variables
 airports = {}
@@ -71,15 +70,6 @@ async def fetch_airports_csv(url: str = CSV_URL) -> Dict[str, str]:
                         airports_data[iata] = full_name
                 
                 print(f"Loaded {len(airports_data)} airports from CSV", file=sys.stderr)
-                
-                # Save to cache file
-                try:
-                    with open(AIRPORTS_CACHE_FILE, 'w') as f:
-                        json.dump(airports_data, f)
-                    print(f"Saved airports to cache file: {AIRPORTS_CACHE_FILE}", file=sys.stderr)
-                except Exception as cache_e:
-                    print(f"Warning: Could not save airports cache: {cache_e}", file=sys.stderr)
-                
                 return airports_data
     except ImportError:
         print("aiohttp not installed. Cannot fetch airports CSV.", file=sys.stderr)
@@ -88,19 +78,6 @@ async def fetch_airports_csv(url: str = CSV_URL) -> Dict[str, str]:
     except Exception as e:
         print(f"Error fetching airports: {e}", file=sys.stderr)
         return {}
-
-# Load airports from cache if available
-def load_airports_cache() -> Dict[str, str]:
-    """Load airports from cache file if available."""
-    if AIRPORTS_CACHE_FILE.exists():
-        try:
-            with open(AIRPORTS_CACHE_FILE, 'r') as f:
-                cache = json.load(f)
-                print(f"Loaded {len(cache)} airports from cache", file=sys.stderr)
-                return cache
-        except Exception as e:
-            print(f"Error loading airports cache: {e}", file=sys.stderr)
-    return {}
 
 # Initialize the FastMCP server with dependencies
 mcp = FastMCP(
@@ -445,36 +422,30 @@ Can you help me compare these destinations on the following factors:
 Based on these factors, which would you recommend and why?
 After your recommendation, could you show me flight options for both destinations?"""
 
-# Initialize airports on startup - this is crucial
+# Initialize airports on startup
 async def initialize_airports():
     """Initialize airport data at startup."""
     global airports
     
-    # First try to load from cache
-    cache = load_airports_cache()
-    if cache:
-        airports = cache
-    
-    # If cache is empty, fetch from CSV
-    if not airports:
-        fresh_airports = await fetch_airports_csv()
-        if fresh_airports:
-            airports = fresh_airports
+    fresh_airports = await fetch_airports_csv()
+    if fresh_airports:
+        airports = fresh_airports
     
     print(f"Initialized with {len(airports)} airports", file=sys.stderr)
 
 # Run the server
-async def main():
-    """Main function to initialize and run the server."""
+if __name__ == "__main__":
     print("Initializing airports database...", file=sys.stderr)
+    # Run the initialization in an event loop
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(initialize_airports())
+    
+    print("Starting server - waiting for connections...", file=sys.stderr)
     try:
-        await initialize_airports()
-        print("Starting server - waiting for connections...", file=sys.stderr)
+        # This will keep the server running until interrupted
         mcp.run()
     except Exception as e:
         print(f"Error running server: {e}", file=sys.stderr)
         import traceback
         traceback.print_exc(file=sys.stderr)
         sys.exit(1)
-
-asyncio.run(main())
