@@ -16,6 +16,8 @@ from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 from pathlib import Path
 
+os.environ["DANGEROUSLY_OMIT_AUTH"] = "true"
+
 # Print debug info to stderr (will be captured in Claude logs)
 print("Starting Flight Planner server...", file=sys.stderr)
 
@@ -473,8 +475,7 @@ if __name__ == "__main__":
     print("Starting server - waiting for connections...", file=sys.stderr)
     try:
         # This will keep the server running until interrupted
-        port = int(os.getenv("PORT", "8000"))
-        mcp.run(transport="streamable-http", host="0.0.0.0", port=port)
+        mcp.run(transport="streamable-http", host="0.0.0.0", port=8000)
     except Exception as e:
         print(f"Error running server: {e}", file=sys.stderr)
         import traceback

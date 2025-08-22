@@ -3,13 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently 'next dev --turbopack' 'source src/google-flights-mcp/.venv/bin/activate && bunx --bun @modelcontextprotocol/inspector python3 src/google-flights-mcp/main.py'",
+    "dev": "concurrently 'next dev --turbopack' 'source src/google-flights-mcp/.venv/bin/activate && bunx --bun @modelcontextprotocol/inspector python3 src/google-flights-mcp/main.py' 'source src/google-flights-mcp/.venv/bin/activate && python3 src/google-flights-mcp/main.py' 'bunx --bun convex dev'",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {
+    "@langchain/core": "^0.3.72",
+    "@langchain/langgraph": "^0.4.6",
+    "@langchain/mcp-adapters": "^0.6.0",
+    "@langchain/openai": "^0.6.9",
+    "child_process": "^1.0.2",
     "concurrently": "^9.2.0",
+    "convex": "^1.25.4",
     "next": "15.4.7",
     "react": "19.1.0",
     "react-dom": "19.1.0"
